@@ -48,6 +48,22 @@ class JsonFileProxy extends NGN.DATA.Proxy {
     })
   }
 
+  get lockfile () {
+    return this.dbfile + '.lock'
+  }
+
+  get locked () {
+    return NGN.util.pathReadable(this.lockfile)
+  }
+
+  get lockfilepid () {
+    if (!this.locked) {
+      return 'None'
+    }
+
+    return require('fs').readFileSync(this.lockfile).toString().trim()
+  }
+
   init (datastore) {
     super.init(datastore)
     NGN.inherit(this, datastore)
@@ -81,6 +97,17 @@ class JsonFileProxy extends NGN.DATA.Proxy {
     return decoded
   }
 
+  lock () {
+    console.log(this.proxy.lockfile)
+    require('fs').writeFileSync(this.proxy.lockfile, process.pid, {
+      encoding: 'utf8'
+    })
+  }
+
+  unlock () {
+    require('fs').unlinkSync(this.proxy.lockfile)
+  }
+
   /**
    * @method save
    * Save data to the JSON file.
@@ -90,6 +117,10 @@ class JsonFileProxy extends NGN.DATA.Proxy {
    * Fired after the save is complete.
    */
   save (callback) {
+    if (this.proxy.locked) {
+      throw new Error('Process ID ' + this.proxy.lockfilepid + ' has a lock on ' + this.dbfile + '. Cannot save.')
+    }
+
     this.mkdirp(this.directory)
 
     let content = JSON.stringify({data: this.data})
@@ -98,9 +129,16 @@ class JsonFileProxy extends NGN.DATA.Proxy {
       content = this.encrypt(content)
     }
 
+    // Create a lock file
+    this.lock()
+
+    // Write contents to disk
     require('fs').writeFileSync(this.dbfile, content, {
       encoding: 'utf8'
     })
+
+    // Unlock
+    this.unlock()
 
     this.emit('save')
     if (callback && typeof callback === 'function') {
@@ -124,9 +162,17 @@ class JsonFileProxy extends NGN.DATA.Proxy {
 
     let content
     try {
-      content = JSON.parse(require('fs').readFileSync(this.dbfile).toString())
+      content = require('fs').readFileSync(this.dbfile).toString()
     } catch (err) {
       throw err
+    }
+
+    if (content.trim().substr(0, 1) !== '{') {
+      if (this.munge) {
+        content = this.decrypt(content)
+      } else {
+        throw new Error('Unrecognized or encrypted format detected. If the file is encrypted, the proxy must have an encryptionKey configured..')
+      }
     }
 
     if (this.type === 'model') {
@@ -134,6 +180,8 @@ class JsonFileProxy extends NGN.DATA.Proxy {
     } else {
       this.reload(content.data)
     }
+
+    content = null // Garbage collect immediately
 
     this.emit('fetch')
     callback && callback()
