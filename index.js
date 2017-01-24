@@ -98,7 +98,6 @@ class JsonFileProxy extends NGN.DATA.Proxy {
   }
 
   lock () {
-    console.log(this.proxy.lockfile)
     require('fs').writeFileSync(this.proxy.lockfile, process.pid, {
       encoding: 'utf8'
     })
@@ -173,6 +172,10 @@ class JsonFileProxy extends NGN.DATA.Proxy {
       } else {
         throw new Error('Unrecognized or encrypted format detected. If the file is encrypted, the proxy must have an encryptionKey configured..')
       }
+    }
+
+    if (typeof content !== 'object') {
+      content = JSON.parse(content)
     }
 
     if (this.type === 'model') {
