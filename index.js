@@ -15,7 +15,8 @@ class JsonFileProxy extends NGN.DATA.Proxy {
     config = config || {}
 
     if (!config.file) {
-      throw new Error('No database configuration detected.')
+      console.log('Invalid Configuration:', config)
+      throw new Error('No datafile configuration detected.')
     }
 
     config.file = require('path').resolve(config.file)
