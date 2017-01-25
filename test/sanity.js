@@ -453,3 +453,30 @@ test('Live Sync Store', function (t) {
 
   tasks.run(true)
 })
+
+test('Missing File', function (t) {
+  fse.emptyDirSync(path.dirname(root))
+
+  let Person = new NGN.DATA.Model({
+    fields: {
+      firstname: null,
+      lastname: null
+    }
+  })
+
+  let People = new NGN.DATA.Store({
+    model: Person,
+    proxy: new NGNX.DATA.JsonFileProxy(root)
+  })
+
+  try {
+    People.fetch(() => {
+      t.pass('Missing data file loads empty record successfully.')
+      t.ok(People.data.length === 0, 'Properly cleared data store.')
+      t.end()
+    })
+  } catch (e) {
+    console.log(e)
+    t.fail('Missing data file throws an error.')
+  }
+})

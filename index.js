@@ -156,10 +156,23 @@ class JsonFileProxy extends NGN.DATA.Proxy {
    */
   fetch (callback) {
     if (!NGN.util.pathReadable(this.dbfile)) {
-      throw new Error(this.dbfile + ' does not exist or cannot be found.')
+      // throw new Error(this.dbfile + ' does not exist or cannot be found.')
+      if (this.type === 'model') {
+        this.load({})
+      } else {
+        this.reload([])
+      }
+
+      this.emit('fetch')
+      if (NGN.isFn(callback)) {
+        callback()
+      }
+
+      return
     }
 
     let content
+
     try {
       content = require('fs').readFileSync(this.dbfile).toString()
     } catch (err) {
