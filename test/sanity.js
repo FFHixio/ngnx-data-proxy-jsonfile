@@ -99,7 +99,7 @@ test('Self Inspection', function (t) {
 test('Cryptography for Data at Rest', function (t) {
   let m = meta()
   m.proxy = new NGNX.DATA.JsonFileProxy({
-    directory: root,
+    file: root,
     encryptionKey: 't3stK3y'
   })
 

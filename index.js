@@ -6,36 +6,32 @@
  */
 class JsonFileProxy extends NGN.DATA.Proxy {
   constructor (config) {
-    config = config || {}
-
     if (typeof config === 'string') {
       config = {
-        directory: config
+        file: config
       }
     }
 
-    if (!config.directory) {
+    config = config || {}
+
+    if (!config.file) {
       throw new Error('No database configuration detected.')
     }
 
-    if (!NGN.util.pathReadable(config.directory)) {
-      console.warn(config.directory + ' does not exist or cannot be found. It will be created automatically if any data operation is requested.')
+    config.file = require('path').resolve(config.file)
+
+    if (!NGN.util.pathReadable(config.file)) {
+      console.warn(config.file + ' does not exist or cannot be found. It will be created automatically if any data operation is requested.')
     }
 
     super(config)
 
-    config.directory = require('path').resolve(config.directory)
-
     Object.defineProperties(this, {
       /**
-       * @cfg {string} directory
+       * @cfg {string} file
        * Path to the JSON file.
        */
-      directory: NGN.const(require('path').dirname(config.directory)),
-
-      dbfile: NGN.const(config.directory),
-
-      file: NGN.const(require('path').basename(config.directory)),
+      dbfile: NGN.const(config.file),
 
       /**
        * @cfg {string} [encryptionKey=null]
@@ -120,7 +116,7 @@ class JsonFileProxy extends NGN.DATA.Proxy {
       throw new Error('Process ID ' + this.proxy.lockfilepid + ' has a lock on ' + this.dbfile + '. Cannot save.')
     }
 
-    this.mkdirp(this.directory)
+    this.mkdirp(require('path').dirname(this.dbfile))
 
     let content = JSON.stringify({data: this.data})
 
