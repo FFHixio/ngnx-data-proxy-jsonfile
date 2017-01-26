@@ -15,7 +15,7 @@ class JsonFileProxy extends NGN.DATA.Proxy {
     config = config || {}
 
     if (!config.file) {
-      console.log('Invalid Configuration:', config)
+      console.log('Invalid Configuration:', config, '(' + typeof config + ')')
       throw new Error('No datafile configuration detected.')
     }
 
@@ -41,7 +41,14 @@ class JsonFileProxy extends NGN.DATA.Proxy {
        * will make the file on disk unreadable to a human if they do not have
        * the key.
        */
-      munge: NGN.private(NGN.coalesce(config.encryptionKey, null))
+      munge: NGN.private(NGN.coalesce(config.encryptionKey, null)),
+
+      /**
+       * @cfg {string} [cipher=aes-256-cbc]
+       * The type of cipher to use when encrypting/decrypting data at rest.
+       * This is only applied if #encryptionKey is provided.
+       */
+      cipher: NGN.privateconst(NGN.coalesce(config.cipher, 'aes-256-cbc'))
     })
   }
 
@@ -81,14 +88,14 @@ class JsonFileProxy extends NGN.DATA.Proxy {
   }
 
   encrypt (data) {
-    let cipher = require('crypto').createCipher('aes-256-cbc', this.munge)
+    let cipher = require('crypto').createCipher(this.cipher, this.munge)
     let encoded = cipher.update(data, 'utf8', 'hex')
     encoded += cipher.final('hex')
     return encoded
   }
 
   decrypt (data) {
-    let cipher = require('crypto').createDecipher('aes-256-cbc', this.munge)
+    let cipher = require('crypto').createDecipher(this.cipher, this.munge)
     let decoded = cipher.update(data, 'hex', 'utf8')
     decoded += cipher.final('utf8')
     return decoded
@@ -137,7 +144,7 @@ class JsonFileProxy extends NGN.DATA.Proxy {
     this.unlock()
 
     this.emit('save')
-    if (callback && typeof callback === 'function') {
+    if (NGN.isFn(callback)) {
       callback()
     }
   }
@@ -213,58 +220,33 @@ class JsonFileProxy extends NGN.DATA.Proxy {
    */
   enableLiveSync () {
     if (this.type === 'model') {
-      this.on('field.create', () => {
-        this.save(() => {
-          this.emit('live.create')
-        })
-      })
-
-      this.on('field.update', () => {
-        this.save(() => {
-          this.emit('live.update')
-        })
-      })
-
-      this.on('field.remove', () => {
-        this.save(() => {
-          this.emit('live.delete')
-        })
-      })
+      // Basic CRUD (-R)
+      this.on('field.create', this.saveAndEmit('live.create'))
+      this.on('field.update', this.saveAndEmit('live.update'))
+      this.on('field.remove', this.saveAndEmit('live.delete'))
 
       // relationship.create is unncessary because no data is available
       // when a relationship is created. All related data will trigger a
       // `field.update` event.
-      this.on('relationship.remove', () => {
-        this.save(() => {
-          this.emit('live.delete')
-        })
-      })
+      this.on('relationship.remove', this.saveAndEmit('live.delete'))
     } else {
       // Persist new records
-      this.on('record.create', (record) => {
-        this.save(() => {
-          this.emit('live.create', record)
-        })
-      })
+      this.on('record.create', this.saveAndEmit('live.create'))
+      this.on('record.restore', this.saveAndEmit('live.create'))
 
       // Update existing records
-      this.on('record.update', (record, change) => {
-        this.save(() => {
-          this.emit('live.update', record)
-        })
-      })
+      this.on('record.update', this.saveAndEmit('live.update'))
 
       // Remove old records
-      this.on('record.delete', (record) => {
-        this.save(() => {
-          this.emit('live.delete', record)
-        })
-      })
+      this.on('record.delete', this.saveAndEmit('live.delete'))
+      this.on('clear', this.saveAndEmit('live.delete'))
+    }
+  }
 
-      this.on('clear', () => {
-        this.save(() => {
-          this.emit('live.delete')
-        })
+  saveAndEmit (eventName) {
+    return (record) => {
+      this.save(() => {
+        this.emit(eventName, record || null)
       })
     }
   }
