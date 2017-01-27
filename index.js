@@ -1,114 +1,13 @@
 'use strict'
+require('ngnx-data-proxy-file')
 
 /**
  * @class NGNX.DATA.JsonFileProxy
  * Persist NGN DATA stores using a JSON file.
  */
-class JsonFileProxy extends NGN.DATA.Proxy {
+class JsonFileProxy extends NGNX.DATA.FileProxy {
   constructor (config) {
-    if (typeof config === 'string') {
-      config = {
-        file: config
-      }
-    }
-
-    config = config || {}
-
-    if (!config.file) {
-      console.log('Invalid Configuration:', config, '(' + typeof config + ')')
-      throw new Error('No datafile configuration detected.')
-    }
-
-    config.file = require('path').resolve(config.file)
-
-    if (!NGN.util.pathReadable(config.file)) {
-      console.warn(config.file + ' does not exist or cannot be found. It will be created automatically if any data operation is requested.')
-    }
-
     super(config)
-
-    Object.defineProperties(this, {
-      /**
-       * @cfg {string} file
-       * Path to the JSON file.
-       */
-      dbfile: NGN.const(config.file),
-
-      /**
-       * @cfg {string} [encryptionKey=null]
-       * Set this to a hash key to obfuscate (scramble) the data. This is a
-       * reversible hashing method and should not be considered "secure", but it
-       * will make the file on disk unreadable to a human if they do not have
-       * the key.
-       */
-      munge: NGN.private(NGN.coalesce(config.encryptionKey, null)),
-
-      /**
-       * @cfg {string} [cipher=aes-256-cbc]
-       * The type of cipher to use when encrypting/decrypting data at rest.
-       * This is only applied if #encryptionKey is provided.
-       */
-      cipher: NGN.privateconst(NGN.coalesce(config.cipher, 'aes-256-cbc'))
-    })
-  }
-
-  get lockfile () {
-    return this.dbfile + '.lock'
-  }
-
-  get locked () {
-    return NGN.util.pathReadable(this.lockfile)
-  }
-
-  get lockfilepid () {
-    if (!this.locked) {
-      return 'None'
-    }
-
-    return require('fs').readFileSync(this.lockfile).toString().trim()
-  }
-
-  init (datastore) {
-    super.init(datastore)
-    NGN.inherit(this, datastore)
-  }
-
-  mkdirp (dir) {
-    if (NGN.util.pathReadable(dir)) {
-      return
-    }
-
-    if (NGN.util.pathReadable(require('path').join(dir, '..'))) {
-      require('fs').mkdirSync(dir)
-      return
-    }
-
-    this.mkdirp(require('path').join(dir, '..'))
-    this.mkdirp(dir)
-  }
-
-  encrypt (data) {
-    let cipher = require('crypto').createCipher(this.cipher, this.munge)
-    let encoded = cipher.update(data, 'utf8', 'hex')
-    encoded += cipher.final('hex')
-    return encoded
-  }
-
-  decrypt (data) {
-    let cipher = require('crypto').createDecipher(this.cipher, this.munge)
-    let decoded = cipher.update(data, 'hex', 'utf8')
-    decoded += cipher.final('utf8')
-    return decoded
-  }
-
-  lock () {
-    require('fs').writeFileSync(this.proxy.lockfile, process.pid, {
-      encoding: 'utf8'
-    })
-  }
-
-  unlock () {
-    require('fs').unlinkSync(this.proxy.lockfile)
   }
 
   /**
@@ -120,33 +19,12 @@ class JsonFileProxy extends NGN.DATA.Proxy {
    * Fired after the save is complete.
    */
   save (callback) {
-    if (this.proxy.locked) {
-      throw new Error('Process ID ' + this.proxy.lockfilepid + ' has a lock on ' + this.dbfile + '. Cannot save.')
-    }
+    this.presave()
 
-    this.mkdirp(require('path').dirname(this.dbfile))
+    let content = JSON.stringify({data: this.store.data})
 
-    let content = JSON.stringify({data: this.data})
-
-    if (this.munge) {
-      content = this.encrypt(content)
-    }
-
-    // Create a lock file
-    this.lock()
-
-    // Write contents to disk
-    require('fs').writeFileSync(this.dbfile, content, {
-      encoding: 'utf8'
-    })
-
-    // Unlock
-    this.unlock()
-
-    this.emit('save')
-    if (NGN.isFn(callback)) {
-      callback()
-    }
+    this.writeToDisk(content)
+    this.postsave(callback)
   }
 
   /**
@@ -159,36 +37,18 @@ class JsonFileProxy extends NGN.DATA.Proxy {
    * Fired after the fetch and parse is complete.
    */
   fetch (callback) {
-    if (!NGN.util.pathReadable(this.dbfile)) {
-      // throw new Error(this.dbfile + ' does not exist or cannot be found.')
+    let content = this.readFromDisk()
+
+    if (content === null) {
       if (this.type === 'model') {
-        this.load({})
+        this.store.load({})
       } else {
-        this.reload([])
+        this.store.reload([])
       }
 
-      this.emit('fetch')
-      if (NGN.isFn(callback)) {
-        callback()
-      }
+      this.postfetch(callback)
 
       return
-    }
-
-    let content
-
-    try {
-      content = require('fs').readFileSync(this.dbfile).toString()
-    } catch (err) {
-      throw err
-    }
-
-    if (content.trim().substr(0, 1) !== '{') {
-      if (this.munge) {
-        content = this.decrypt(content)
-      } else {
-        throw new Error('Unrecognized or encrypted format detected. If the file is encrypted, the proxy must have an encryptionKey configured..')
-      }
     }
 
     if (typeof content !== 'object') {
@@ -196,59 +56,12 @@ class JsonFileProxy extends NGN.DATA.Proxy {
     }
 
     if (this.type === 'model') {
-      this.load(content.data)
+      this.store.load(content.data)
     } else {
-      this.reload(content.data)
+      this.store.reload(content.data)
     }
 
-    content = null // Garbage collect immediately
-
-    this.emit('fetch')
-    callback && callback()
-  }
-
-  /**
-   * @method enableLiveSync
-   * Live synchronization monitors the dataset for changes and immediately
-   * commits them to the data storage system.
-   * @fires live.create
-   * Triggered when a new record is persisted to the data store.
-   * @fires live.update
-   * Triggered when a record modification is persisted to the data store.
-   * @fires live.delete
-   * Triggered when a record is removed from the data store.
-   */
-  enableLiveSync () {
-    if (this.type === 'model') {
-      // Basic CRUD (-R)
-      this.on('field.create', this.saveAndEmit('live.create'))
-      this.on('field.update', this.saveAndEmit('live.update'))
-      this.on('field.remove', this.saveAndEmit('live.delete'))
-
-      // relationship.create is unncessary because no data is available
-      // when a relationship is created. All related data will trigger a
-      // `field.update` event.
-      this.on('relationship.remove', this.saveAndEmit('live.delete'))
-    } else {
-      // Persist new records
-      this.on('record.create', this.saveAndEmit('live.create'))
-      this.on('record.restore', this.saveAndEmit('live.create'))
-
-      // Update existing records
-      this.on('record.update', this.saveAndEmit('live.update'))
-
-      // Remove old records
-      this.on('record.delete', this.saveAndEmit('live.delete'))
-      this.on('clear', this.saveAndEmit('live.delete'))
-    }
-  }
-
-  saveAndEmit (eventName) {
-    return (record) => {
-      this.save(() => {
-        this.emit(eventName, record || null)
-      })
-    }
+    this.postfetch(callback, content)
   }
 }
 

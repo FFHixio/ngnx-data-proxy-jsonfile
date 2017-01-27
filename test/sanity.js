@@ -149,7 +149,7 @@ test('Basic Save & Fetch (Data Model)', function (t) {
   })
 
   record.once('field.update', function (change) {
-    record.save(() => {
+    record.proxy.save(() => {
       t.pass('Save method applies callback.')
       t.ok(NGN.util.pathReadable(root), 'File created on save.')
 
@@ -157,7 +157,7 @@ test('Basic Save & Fetch (Data Model)', function (t) {
 
       t.ok(record.lastname === 'Master', 'Changes apply normally.')
 
-      record.fetch(() => {
+      record.proxy.fetch(() => {
         t.pass('Fetch method applies callback.')
         t.ok(record.lastname === 'Doctor', 'Data accurately loaded from disk.')
         t.ok(record.pet.name === 'K-9', 'Properly retrieved nested model data.')
@@ -175,10 +175,10 @@ test('Basic Save & Fetch (Data Store)', function (t) {
   let ds = createPetSet()
 
   ds.once('record.update', function (record, change) {
-    ds.save(() => {
+    ds.proxy.save(() => {
       t.pass('Save method applies callback.')
 
-      ds.fetch(() => {
+      ds.proxy.fetch(() => {
         t.pass('Fetch method applies callback.')
         t.ok(ds.first.lastname === 'Doctor' &&
           ds.last.lastname === 'Master' &&
@@ -209,11 +209,11 @@ test('Store Array Values', function (t) {
     a: ['a', 'b', 'c', {d: true}]
   })
 
-  record.save(() => {
+  record.proxy.save(() => {
     t.pass('Saved array data.')
     record.a = []
 
-    record.fetch(() => {
+    record.proxy.fetch(() => {
       t.pass('Retrieved array data.')
 
       t.ok(Array.isArray(record.a), 'Record returned in array format.')
@@ -247,10 +247,10 @@ test('Non-String Primitive Data Types', function (t) {
     }
   })
 
-  record.save(() => {
+  record.proxy.save(() => {
     record.b = true
 
-    record.fetch(() => {
+    record.proxy.fetch(() => {
       t.ok(record.b === false, 'Boolean supported.')
       t.ok(record.n === 3, 'Number supported.')
       t.ok(record.nil === null, 'Null supported.')
@@ -287,17 +287,16 @@ test('Live Sync Model', function (t) {
     }
   })
 
-  record.save(() => {
-    record.enableLiveSync()
-
+  record.proxy.save(() => {
+    record.proxy.enableLiveSync()
     let tasks = new TaskRunner()
 
     tasks.add((next) => {
-      record.once('live.update', () => {
+      record.proxy.once('live.update', () => {
         t.pass('live.update method detected.')
         record.setSilent('firstname', 'Bubba')
 
-        record.fetch(() => {
+        record.proxy.fetch(() => {
           t.ok(record.firstname === 'Da', 'Persisted correct value.')
           next()
         })
@@ -309,7 +308,7 @@ test('Live Sync Model', function (t) {
     tasks.add((next) => {
       record.once('live.create', () => {
         t.pass('live.create triggered on new field creation.')
-        record.fetch(() => {
+        record.proxy.fetch(() => {
           t.ok(record.hasOwnProperty('middlename') && record.middlename === 'Alonsi', 'Field creation persisted on the fly.')
           next()
         })
@@ -338,7 +337,7 @@ test('Live Sync Model', function (t) {
 
         record.vehicle.setSilent('type', 'other')
 
-        record.fetch(() => {
+        record.proxy.fetch(() => {
           t.ok(record.vehicle.type === 'Tardis', 'Proper value persisted in nested model.')
           next()
         })
@@ -382,7 +381,7 @@ test('Live Sync Store', function (t) {
     proxy: new NGNX.DATA.JsonFileProxy(root)
   })
 
-  People.enableLiveSync()
+  People.proxy.enableLiveSync()
 
   let tasks = new TaskRunner()
 
@@ -454,6 +453,60 @@ test('Live Sync Store', function (t) {
   tasks.run(true)
 })
 
+test('Restoring Soft Delete Records', function (t) {
+  fse.emptyDirSync(path.dirname(root))
+
+  let Person = new NGN.DATA.Model({
+    fields: {
+      firstname: null,
+      lastname: null
+    }
+  })
+
+  let People = new NGN.DATA.Store({
+    model: Person,
+    proxy: new NGNX.DATA.JsonFileProxy({
+      file: root
+    }),
+    softDelete: true,
+    softDeleteTtl: 2000
+  })
+
+  People.once('load', () => {
+    People.once('save', () => {
+      People.proxy.enableLiveSync()
+
+      People.once('live.delete', (record) => {
+        let data = JSON.parse(require('fs').readFileSync(root).toString())
+        t.ok(data.data.length === People.recordCount, 'File contains proper number of records.')
+
+        People.once('live.create', (newRecord) => {
+          data = JSON.parse(require('fs').readFileSync(root).toString())
+          t.ok(data.data.length === People.recordCount && People.recordCount === 2, 'Data store restoration process persists proper number of records to disk.')
+
+          fse.emptyDirSync(path.dirname(root))
+
+          t.end()
+        })
+
+        People.restore(record.checksum)
+      })
+
+      People.remove(1)
+    })
+
+    People.proxy.save()
+  })
+
+  People.load([{
+    firstname: 'The',
+    lastname: 'Doctor'
+  }, {
+    firstname: 'The',
+    lastname: 'Master'
+  }])
+})
+
 test('Missing File', function (t) {
   fse.emptyDirSync(path.dirname(root))
 
@@ -470,7 +523,7 @@ test('Missing File', function (t) {
   })
 
   try {
-    People.fetch(() => {
+    People.proxy.fetch(() => {
       t.pass('Missing data file loads empty record successfully.')
       t.ok(People.data.length === 0, 'Properly cleared data store.')
       t.end()
