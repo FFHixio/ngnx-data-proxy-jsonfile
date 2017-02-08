@@ -28,7 +28,7 @@
   "homepage": "https://github.com/ngnjs/ngnx-data-proxy-jsonfile#readme",
   "dependencies": {
     "ngn-data": "^0.0.43",
-    "ngnx-data-proxy-file": "^1.0.2"
+    "ngnx-data-proxy-file": "^1.0.3"
   },
   "devDependencies": {
     "babel-eslint": "^7.1.1",
