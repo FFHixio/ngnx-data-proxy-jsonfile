@@ -1,6 +1,6 @@
 {
   "name": "ngnx-data-proxy-jsonfile",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Fetch and save data to a local JSON file.",
   "main": "index.js",
   "directories": {
