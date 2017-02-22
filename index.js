@@ -19,7 +19,9 @@ class JsonFileProxy extends NGNX.DATA.FileProxy {
    * Fired after the save is complete.
    */
   save (callback) {
-    this.presave()
+    if (!this.presave()) {
+      return
+    }
 
     let content = JSON.stringify({data: this.store.data})
 

@@ -17,6 +17,7 @@ let meta = function () {
   return {
     idAttribute: 'testid',
     fields: {
+      testid: null,
       firstname: null,
       lastname: null,
       val: {
