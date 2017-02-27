@@ -534,3 +534,16 @@ test('Missing File', function (t) {
     t.fail('Missing data file throws an error.')
   }
 })
+
+test('Lockfile Settings', function (t) {
+  let m = meta()
+  m.proxy = new NGNX.DATA.FileProxy({
+    file: root,
+    autolock: false
+  })
+
+  t.ok(!m.proxy.locked, 'Disabling autolock results in an "unlocked" state.')
+  t.ok(!m.proxy.isLockOwner, 'Disabling autolock results in the process NOT identifying itself as the lock owner.')
+
+  t.end()
+})
