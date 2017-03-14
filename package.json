@@ -1,6 +1,6 @@
 {
   "name": "ngnx-data-proxy-jsonfile",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "Fetch and save data to a local JSON file.",
   "main": "index.js",
   "directories": {
@@ -27,7 +27,7 @@
   },
   "homepage": "https://github.com/ngnjs/ngnx-data-proxy-jsonfile#readme",
   "dependencies": {
-    "ngnx-data-proxy-file": "^1.0.17"
+    "ngnx-data-proxy-file": "^1.0.18"
   },
   "devDependencies": {
     "babel-eslint": "^7.1.1",
