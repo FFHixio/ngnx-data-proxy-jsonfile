@@ -41,7 +41,7 @@ class JsonFileProxy extends NGNX.DATA.FileProxy {
   fetch (callback) {
     let content = this.readFromDisk()
 
-    if (content === null) {
+    if (content === null || content.trim().length === 0) {
       if (this.type === 'model') {
         this.store.load({})
       } else {
