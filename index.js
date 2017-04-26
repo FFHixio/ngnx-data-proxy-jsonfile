@@ -6,10 +6,6 @@ require('ngnx-data-proxy-file')
  * Persist NGN DATA stores using a JSON file.
  */
 class JsonFileProxy extends NGNX.DATA.FileProxy {
-  constructor (config) {
-    super(config)
-  }
-
   /**
    * @method save
    * Save data to the JSON file.
