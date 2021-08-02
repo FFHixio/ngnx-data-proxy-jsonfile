@@ -7,7 +7,9 @@
     "test": "test"
   },
   "scripts": {
-    "test": "tape test/**/*.js | tap-spec && standard | snazzy --verbose"
+    "test": "tape test/**/*.js | tap-spec && standard | snazzy --verbose",
+    "prepublish": "npm run snyk-protect",
+    "snyk-protect": "snyk-protect"
   },
   "repository": {
     "type": "git",
@@ -27,7 +29,8 @@
   },
   "homepage": "https://github.com/ngnjs/ngnx-data-proxy-jsonfile#readme",
   "dependencies": {
-    "ngnx-data-proxy-file": "^1.0.21"
+    "ngnx-data-proxy-file": "^1.0.21",
+    "@snyk/protect": "latest"
   },
   "devDependencies": {
     "babel-eslint": "^7.2.3",
@@ -57,5 +60,6 @@
       "LoggingMethodError",
       "DuplicateLoggingMethodError"
     ]
-  }
+  },
+  "snyk": true
 }
